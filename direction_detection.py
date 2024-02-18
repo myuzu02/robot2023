@@ -6,6 +6,8 @@ import numpy as np
 def main():
 
 #   src_img = cv2.imread( "2023_sei1.png" )
+#   src_img = cv2.imread( "2023_ng2.png" )
+    
 #   src_img = cv2.imread( "presence_forward.png" )
 #   src_img = cv2.imread( "presence_reverse.png" )
 #   src_img = cv2.imread( "RFIDpalette.png" )
@@ -17,7 +19,7 @@ def main():
 #   src_img = cv2.imread( "sei2_swnon.png" )
 #   src_img = cv2.imread( "pos12_sei_rl.png" )
 
-    temprate_img = cv2.imread( "2023_8_temp.png" )
+    temprate_img = cv2.imread( "switch_model.png" )
 
     Capture_size_r, Capture_size_c, Capture_size_color = src_img.shape   # 入力画像の高さ、幅、（色）を取得
 
@@ -62,7 +64,7 @@ def main():
     cropped_img = src_img[sw_offset_fr:sw_offset_fr + sw_height, sw_offset_fc:sw_offset_fc + sw_width]
     temprate_img = cv2.cvtColor( temprate_img,cv2.COLOR_BGR2GRAY )
     cropped_img = cv2.cvtColor( cropped_img,cv2.COLOR_BGR2GRAY )
-#   cv2.imshow( "sw F image", cropped_img )
+    #cv2.imshow( "sw F image", cropped_img )
     res = cv2.matchTemplate( cropped_img, temprate_img, cv2.TM_CCOEFF_NORMED )	# テンプレートマッチング
     loc = np.where( res >= sw_match_threshold )
     h, w = temprate_img.shape

@@ -58,7 +58,7 @@ def image_process( src_img ):
 #   Capture_size_c = 640
 
     Capture_size_r, Capture_size_c, Capture_size_color = src_img.shape   # 入力画像の高さ、幅、（色）を取得
-    pixel_mag = 1.0;
+    pixel_mag = 1.0
     pixel_mag = Capture_size_r/480*1.0;		# 画素数680:480を1.0としたときの入力画像の倍率を求める
 #   print( pixel_mag )
     # 座標の初期値は画素数640:480を基準として設定
@@ -76,35 +76,49 @@ def image_process( src_img ):
     hsv_img = cv2.cvtColor( src_img, cv2.COLOR_BGR2HSV )	# HSVに変換する。
     split_img = cv2.split( hsv_img )						# SHVの各チャンネルに分離する。
 
-    #撮影位置    0:基板    1:パレット
-    if mylib.read_gpio(5) == 0:
 
-        result = [DoNotCare, DoNotCare, DoNotCare, DoNotCare]	#  結果の初期値は、全て「未使用」とする。
+    if mylib.read_gpio(4) == 1:
 
-        # 基板有無判定　緑の面積が広かったら基板があるとみなす。
-        hue_img = cv2.inRange( split_img[0], green_low, green_high )	# しきい値内の色相を抽出	
-        sat_img = cv2.inRange( split_img[1], 128, 255 )					# しきい値以上の彩度を抽出
-        green_img = cv2.bitwise_and( hue_img, sat_img )					# 色相と彩度のandを取る
-        pixel_sum = cv2.reduce( green_img, 1, cv2.REDUCE_SUM, dtype=cv2.CV_64F )/255	# 各行の和を求める。
-        pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )		# 各列の和を求める。
+        #撮影位置    0:基板    1:パレット
+        if mylib.read_gpio(5) == 0:
 
-        if pixel_sum > (90000*pixel_mag**2):	# 緑の面積がある程度以上だったら、
-            result[1] = Presence
+            result = [DoNotCare, DoNotCare, DoNotCare, DoNotCare]	#  結果の初期値は、全て「未使用」とする。
+
+            # 基板有無判定　緑の面積が広かったら基板があるとみなす。
+            hue_img = cv2.inRange( split_img[0], green_low, green_high )	# しきい値内の色相を抽出	
+            sat_img = cv2.inRange( split_img[1], 128, 255 )					# しきい値以上の彩度を抽出
+            green_img = cv2.bitwise_and( hue_img, sat_img )					# 色相と彩度のandを取る
+            pixel_sum = cv2.reduce( green_img, 1, cv2.REDUCE_SUM, dtype=cv2.CV_64F )/255	# 各行の和を求める。
+            pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )		# 各列の和を求める。
+
+            if pixel_sum > (90000*pixel_mag**2):	# 緑の面積がある程度以上だったら、
+                # 基板向き検査　特定のパターンを検出して判別
+
+                result[0] = Finish    # 検査終了
+                result[1] = Presence  # 基板有り
+                result[2] = Forward  # 基板順方向
+            else:
+                result[0] = Finish    # 検査終了
+                result[1] = Absence   # 基板無し
+                result[2] = Reverse  # 基板逆方向
+
         else:
-            result[1] = Absence
+             # パレット有無判定
+            hue_img = cv2.inRange( split_img[0], blue_low, blue_high )
+            sat_img = cv2.inRange( split_img[1], 180, 255 )
+            blue_img = cv2.bitwise_and( hue_img, sat_img )
+            pixel_sum = cv2.reduce( blue_img, 1, cv2.REDUCE_SUM, dtype=cv2.CV_64F )/255	# 各行の和を求める。
+            pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )	# 各列の和を求める。
 
-    else:
-         # パレット有無判定
-        hue_img = cv2.inRange( split_img[0], blue_low, blue_high )
-        sat_img = cv2.inRange( split_img[1], 180, 255 )
-        blue_img = cv2.bitwise_and( hue_img, sat_img )
-        pixel_sum = cv2.reduce( blue_img, 1, cv2.REDUCE_SUM, dtype=cv2.CV_64F )/255	# 各行の和を求める。
-        pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )	# 各列の和を求める。
+            if pixel_sum > (10000.0*pixel_mag**2):	# 青の面積がある程度以上だったら、
+                result[3] = Presence	# パレット有り
+            else:
+                result[0] = Finish
+                result[3] = Absence		# パレット無し
 
-        if pixel_sum > (180000.0*pixel_mag**2):	# 青の面積がある程度以上だったら、
-            result[3] = Presence	# パレット有り
-        else:
-            result[3] = Absence		# パレット無し
+    elif mylib.read_gpio(5) == 0:
+        print("検査終了信号OFF")
+
 
 
     # ここまで
