@@ -5,8 +5,8 @@ import numpy as np
 
 def main():
 
-    src_img = cv2.imread( "2023_sei1.png" )
-#   src_img = cv2.imread( "2023_gyaku1.png" )
+#   src_img = cv2.imread( "2023_sei1.png" )
+    src_img = cv2.imread( "2023_gyaku1.png" )
 #   src_img = cv2.imread( "2023_noboard.png" )
 #   src_img = cv2.imread( "2023_palette.png" )
 #   src_img = cv2.imread( "2023_nopalette.png" )
@@ -61,17 +61,32 @@ def main():
     cropped_img = cv2.cvtColor( cropped_img,cv2.COLOR_BGR2GRAY )
 #   cv2.imshow( "sw F image", cropped_img )
     res = cv2.matchTemplate( cropped_img, temprate_img, cv2.TM_CCOEFF_NORMED )	# テンプレートマッチング
-    loc = np.where( res >= sw_match_threshold )
     h, w = temprate_img.shape[::-1]
     cropped_img = cv2.cvtColor( cropped_img, cv2.IMREAD_GRAYSCALE )
     sw_result = 0
-    for pt in zip( *loc[::-1] ):	# マッチング率の高い場所表示
-        cv2.rectangle( cropped_img, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2 )
-        sw_result += 1
 
-    print( "match result F:", sw_result)
-    if sw_result > 60:	# SWを検出した値がある程度以上だったら、
+    value = 0
+    while True:
+        # 結果が最大、最小の位置を検出
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        print("MaxValue = ", max_val)
+
+        if max_val < sw_match_threshold:
+            break
+        value = value + 1
+
+        # 検出位置を描画
+        cv2.rectangle(cropped_img, max_loc, (max_loc[0] + w, max_loc[1] + h), (0, 0, 255), 3)
+        # 検出した位置の近辺の値を０にする
+        range = 10
+        cv2.rectangle(res, (max_loc[0] - range, max_loc[1] - range), (max_loc[0] + range, max_loc[1] + range), 0, -1)
+
+    print("検出数", value)
+    #print( "match result F:", sw_result)
+    if value == 2:	# SWを検出した値がある程度以上だったら、
         cv2.imshow( "result F match", cropped_img )
+        cv2.imshow("Template", temprate_img)
+        #cv2.imshow("Template Result", res / max_val)
         print( "順方向" )
 
     else:
@@ -81,16 +96,31 @@ def main():
         cropped_img = cv2.cvtColor( cropped_img,cv2.COLOR_BGR2GRAY )
         #cv2.imshow( "sw F image", cropped_img )
         res = cv2.matchTemplate( cropped_img, temprate_img, cv2.TM_CCOEFF_NORMED )	# テンプレートマッチング
-        loc = np.where( res >= sw_match_threshold )
         cropped_img = cv2.cvtColor( cropped_img, cv2.IMREAD_GRAYSCALE )
         sw_result = 0
-        for pt in zip( *loc[::-1] ):	# マッチング率の高い場所表示
-            cv2.rectangle( cropped_img, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2 )
-            sw_result += 1
 
-        print( "match result F:", sw_result)
-        if sw_result > 60:
+        value = 0
+        while True:
+            # 結果が最大、最小の位置を検出
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            print("MaxValue = ", max_val)
+
+            if max_val < sw_match_threshold:
+                break
+            value = value + 1
+
+            # 検出位置を描画
+            cv2.rectangle(cropped_img, max_loc, (max_loc[0] + w, max_loc[1] + h), (0, 0, 255), 3)
+            # 検出した位置の近辺の値を０にする
+            range = 10
+            cv2.rectangle(res, (max_loc[0] - range, max_loc[1] - range), (max_loc[0] + range, max_loc[1] + range), 0, -1)
+
+        print("検出数", value)
+        #print( "match result F:", sw_result)
+        if value == 2:
             cv2.imshow( "result F match", cropped_img )
+            cv2.imshow("Template", temprate_img)
+            #cv2.imshow("Template Result", res / max_val)
             print( "逆方向" )
 
         else:

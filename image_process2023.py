@@ -33,17 +33,19 @@ def pout_init():
 # 引数src_imgはカメラから読み込んだ画像
 # 戻り値は画像処理した結果
 def image_process( src_img ):
-#	src_img = cv2.imread( "presence_forward.png" )
-#	src_img = cv2.imread( "presence_reverse.png" )
-#	src_img = cv2.imread( "RFIDpalette.png" )
-#	src_img = cv2.imread( "no_work.png" )
+#   src_img = cv2.imread( "2023_sei1.png" )
+#   src_img = cv2.imread( "2023_gyaku1.png" )
+#   src_img = cv2.imread( "2023_noboard.png" )
+#   src_img = cv2.imread( "2023_palette.png" )
+#   src_img = cv2.imread( "2023_nopalette.png" )
+#   src_img = cv2.imread( "2023_ng1.png" )
+#   src_img = cv2.imread( "2023_ng2.png" )
+#   src_img = cv2.imread( "2023_ng3.png" )
+#   src_img = cv2.imread( "2023_ng4.png" )
+#   src_img = cv2.imread( "2023_ng5.png" )
 
-#   src_img = cv2.imread( "sei1.png" )
-#   src_img = cv2.imread( "sei2.png" )
-#   src_img = cv2.imread( "gyaku1.png" )
-#   src_img = cv2.imread( "gyaku2.png" )
-#   src_img = cv2.imread( "sei2_swnon.png" )
-#   src_img = cv2.imread( "pos12_sei_rl.png" )
+# テンプレート画像の読み込み
+    temprate_img = cv2.imread( "2023_switch_temp.png" )
 
     # 有無、順逆でそれぞれ1にするか0にするかをハードウェア、CB05とのインターフェースによって設定する。
     Finish = 1      #終了
@@ -63,6 +65,8 @@ def image_process( src_img ):
 #   print( pixel_mag )
     # 座標の初期値は画素数640:480を基準として設定
 
+    sw_offset = int( Capture_size_c/2 )	# 検査範囲　1回目：終点(左端)　2回目：始点(右端)
+
     # 色相範囲(角度)　0～255の範囲でしか表せないため1/2で表す
     blue_low = 100	# パレットの青の色相範囲の下限(角度)　200度
     blue_high = 140	# パレットの青の上限　280度
@@ -71,18 +75,26 @@ def image_process( src_img ):
     red_low = 10	# 赤LEDの色相の下限　赤の範囲は20度から0度経由の340度の範囲
     red_high = 170
 
+    sw_match_threshold = 0.5	# スイッチのパターンマッチングの一致率しきい値
 
     # 画像処理
     hsv_img = cv2.cvtColor( src_img, cv2.COLOR_BGR2HSV )	# HSVに変換する。
     split_img = cv2.split( hsv_img )						# SHVの各チャンネルに分離する。
 
+    result = [DoNotCare, DoNotCare, DoNotCare, DoNotCare]
+    #ロボットの状態　  0:能動    1:非能動
+    if (mylib.read_gpio(4) == 0):
 
-    if mylib.read_gpio(4) == 1:
+        #検査状況      0:検査前    1:基板検出後
+        if mylib.read_gpio(5) == 0:
+            result = [DoNotCare, DoNotCare, DoNotCare, DoNotCare]	#  結果の初期値は、全て「未使用」とする。
+        else:
+            #result[0] = Halfway
+            print("検査終了信号OFF")
 
+    else:
         #撮影位置    0:基板    1:パレット
         if mylib.read_gpio(5) == 0:
-
-            result = [DoNotCare, DoNotCare, DoNotCare, DoNotCare]	#  結果の初期値は、全て「未使用」とする。
 
             # 基板有無判定　緑の面積が広かったら基板があるとみなす。
             hue_img = cv2.inRange( split_img[0], green_low, green_high )	# しきい値内の色相を抽出	
@@ -92,15 +104,85 @@ def image_process( src_img ):
             pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )		# 各列の和を求める。
 
             if pixel_sum > (90000*pixel_mag**2):	# 緑の面積がある程度以上だったら、
-                # 基板向き検査　特定のパターンを検出して判別
 
-                result[0] = Finish    # 検査終了
-                result[1] = Presence  # 基板有り
-                result[2] = Forward  # 基板順方向
+                # 基板向き検査　特定のパターンを検出して判別
+                cropped_img = src_img[:, :sw_offset]
+                temprate_img = cv2.cvtColor( temprate_img,cv2.COLOR_BGR2GRAY )
+                cropped_img = cv2.cvtColor( cropped_img,cv2.COLOR_BGR2GRAY )
+                res = cv2.matchTemplate( cropped_img, temprate_img, cv2.TM_CCOEFF_NORMED )	# テンプレートマッチング
+                h, w = temprate_img.shape[::-1]
+                cropped_img = cv2.cvtColor( cropped_img, cv2.IMREAD_GRAYSCALE )
+                value = 0
+                while True:
+                    # 結果が最大、最小の位置を検出
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                    print("MaxValue = ", max_val)
+
+                    if max_val < sw_match_threshold:
+                        break
+
+                    value = value + 1
+                    # 検出位置を描画
+                    cv2.rectangle(cropped_img, max_loc, (max_loc[0] + w, max_loc[1] + h), (0, 0, 255), 3)
+                    # 検出した位置の近辺の値を０にする
+                    range = 10
+                    cv2.rectangle(res, (max_loc[0] - range, max_loc[1] - range), (max_loc[0] + range, max_loc[1] + range), 0, -1)
+
+                print("検出数", value)
+                if value == 2:	# SWを検出した値がある程度以上だったら、
+                    cv2.imshow( "result F match", cropped_img )
+                    cv2.imshow("Template", temprate_img)
+                    #cv2.imshow("Template Result", res / max_val)
+                    #result[0] = Finish    # 検査終了
+                    #result[1] = Presence  # 基板有り
+                    #result[2] = Forward  # 基板順方向
+                    print("1, 1, 1, N")
+                    print( "順方向" )
+
+                else:
+                    #print( "範囲を変更して再検査" )
+                    cropped_img = src_img[:, 320:]
+                    cropped_img = cv2.cvtColor( cropped_img,cv2.COLOR_BGR2GRAY )
+                    res = cv2.matchTemplate( cropped_img, temprate_img, cv2.TM_CCOEFF_NORMED )	# テンプレートマッチング
+                    cropped_img = cv2.cvtColor( cropped_img, cv2.IMREAD_GRAYSCALE )
+                    value = 0
+                    while True:
+                    # 結果が最大、最小の位置を検出
+                        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                        print("MaxValue = ", max_val)
+
+                        if max_val < sw_match_threshold:
+                            break
+
+                        value = value + 1
+                         # 検出位置を描画
+                        cv2.rectangle(cropped_img, max_loc, (max_loc[0] + w, max_loc[1] + h), (0, 0, 255), 3)
+                        # 検出した位置の近辺の値を０にする
+                        range = 10
+                        cv2.rectangle(res, (max_loc[0] - range, max_loc[1] - range), (max_loc[0] + range, max_loc[1] + range), 0, -1)
+
+                        print("検出数", value)
+                        if value == 2:
+                            cv2.imshow( "result F match", cropped_img )
+                            cv2.imshow("Template", temprate_img)
+                            #cv2.imshow("Template Result", res / max_val)
+                            #result[0] = Finish    # 検査終了
+                            #result[1] = Presence  # 基板有り
+                            #result[2] = Forward  # 基板順方向
+                            print("1, 1, 0, N")
+                            print( "逆方向" )
+
+                        else:
+                            #result[0] = Finish    # 検査終了
+                            #result[1] = Absence   # 基板無し
+                            print("1, 0, N, N")
+                            print( "NG" )
+      
             else:
-                result[0] = Finish    # 検査終了
-                result[1] = Absence   # 基板無し
-                result[2] = Reverse  # 基板逆方向
+                #result[0] = Finish    # 検査終了
+                #result[1] = Absence   # 基板無し
+                print("1, 0, N, N")
+                print( "NG" )
 
         else:
              # パレット有無判定
@@ -111,17 +193,16 @@ def image_process( src_img ):
             pixel_sum = cv2.reduce( pixel_sum, 0, cv2.REDUCE_SUM, dtype=cv2.CV_64F )	# 各列の和を求める。
 
             if pixel_sum > (10000.0*pixel_mag**2):	# 青の面積がある程度以上だったら、
-                result[3] = Presence	# パレット有り
+                #result[0] = Finish
+                #result[3] = Presence	# パレット有り
+                print("1, 1, ?, 1")
             else:
-                result[0] = Finish
-                result[3] = Absence		# パレット無し
-
-    elif mylib.read_gpio(5) == 0:
-        print("検査終了信号OFF")
-
-
+                #result[0] = Finish
+                #result[3] = Absence		# パレット無し
+                print("1, 1, ?, 0")
 
     # ここまで
+
 
 #   result[0] = finish      # 画像処理終了信号  Halfway:画像処理途中　　Finish:画像処理終了
 #   result[1] = Presence    # 仮の結果          Absence:ワークがない    Presence:ワークがある
